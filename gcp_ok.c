@@ -45,7 +45,7 @@ void converter_gcp_para_cnf() {
     // Cabeçalho provisório
     fprintf(arquivo_saida, "p cnf %d 0\n", total_variaveis);
 
-// Regra 1: Cada vértice deve ter pelo menos uma cor 
+// Condição 1: Cada vértice deve ter pelo menos uma cor 
     for (int vertice = 0; vertice <= numero_vertices; vertice++) { // Para cada um dos vértices
         for (int cor = 0; cor <= numero_cores; cor++) { // Atribui cada uma das cores
             fprintf(arquivo_saida, "%d ", nova_variavel(vertice, cor, numero_cores)); // E gera uma nova variavel correspondente a esse par
@@ -55,7 +55,7 @@ void converter_gcp_para_cnf() {
         total_clausulas++;
     }
 
-    // Regra 2: Cada vértice não pode ter duas cores ao mesmo tempo 
+    // Condição 2: Cada vértice não pode ter duas cores ao mesmo tempo 
     for (int vertice = 0; vertice <= numero_vertices; vertice++) {// Para cada um dos vértices
         for (cor1 = 0; cor1 <= numero_cores; cor1++) { //percorre todas as cores possiveis para cor 1
             for (cor2 = cor1 + 1; cor2 <= numero_cores; cor2++) { //percorre todas as cores possíveis para cor 2
@@ -69,7 +69,7 @@ void converter_gcp_para_cnf() {
         }
     }
 
-    // Regra 3: Vértices adjacentes não podem ter a mesma cor 
+    // Condição 3: Vértices adjacentes não podem ter a mesma cor 
     for (indice_aresta = 0; indice_aresta < numero_arestas; indice_aresta++) {// Percorre as arestas
         //Guarda os dois vertices da aresta
         vertice_u = lista_arestas[indice_aresta][0];
