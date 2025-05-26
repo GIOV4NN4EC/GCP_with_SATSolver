@@ -4,7 +4,7 @@
 #define MAX_ARESTAS 1000
 #define MAX_CORES 10
 
-// Transforma um par (vértice, cor) em uma variável única de SAT
+//Transforma um par (vértice, cor) em uma variável única de SAT
 int nova_variavel(int vertice, int cor, int total_cores) {
     return vertice * total_cores + cor + 1;
 }
