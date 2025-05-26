@@ -7,14 +7,15 @@
 #define MAX_ARESTAS 1000
 #define MAX_CORES 10
 
-// =========================
-// Funções para conversão GCP -> CNF
-// =========================
+// Tradutor GCP -> CNF
 
+//gerador de variaveis com base no par (vertice x, cor y)
 int nova_variavel(int vertice, int cor, int total_cores) {
     return vertice * total_cores + cor + 1;
+    //+1 pois o formato DIMACS só aceita variaveis a partir de 1
 }
 
+//Função principal do tradutor
 void converter_gcp_para_cnf() {
     FILE *arquivo_entrada, *arquivo_saida;
     int numero_vertices, numero_cores, numero_arestas;
@@ -27,8 +28,10 @@ void converter_gcp_para_cnf() {
         return;
     }
 
+    //Lê o cabeçalho do arquivo com o GCP
     fscanf(arquivo_entrada, "GCP %d %d %d\n", &numero_vertices, &numero_cores, &numero_arestas);
 
+    //Armazena as arestas em uma matriz
     for (indice_aresta = 0; indice_aresta < numero_arestas; indice_aresta++) {
         fscanf(arquivo_entrada, "a %d %d\n", &lista_arestas[indice_aresta][0], &lista_arestas[indice_aresta][1]);
     }
@@ -40,25 +43,32 @@ void converter_gcp_para_cnf() {
         return;
     }
 
+    //todas as possibilidades de combinação
     int total_variaveis = numero_vertices * numero_cores;
+    //a principio, não tem nenhuma clausula
     int total_clausulas = 0;
 
+    //escreve o cabeçalho do arquivo CNF, mas sem o numero de clausulas pois ainda nao foram escritas
     fprintf(arquivo_saida, "p cnf %d 0\n", total_variaveis);
 
     // Condição 1: Cada vértice deve ter pelo menos uma cor 
-    for (int vertice = 0; vertice < numero_vertices; vertice++) {
-        for (int cor = 0; cor < numero_cores; cor++) {
+    for (int vertice = 0; vertice < numero_vertices; vertice++) {//percorre todos os vertices
+        for (int cor = 0; cor < numero_cores; cor++) {//e todas as cores para cada vertice
             fprintf(arquivo_saida, "%d ", nova_variavel(vertice, cor, numero_cores));
+            //gera uma variavel para cada combinação
         }
         fprintf(arquivo_saida, "0\n");
+        //finaliza a clausula após gerar as variáveis para um vértice
         total_clausulas++;
     }
 
     // Condição 2: Cada vértice não pode ter duas cores ao mesmo tempo
-    for (int vertice = 0; vertice < numero_vertices; vertice++) {
-        for (cor1 = 0; cor1 < numero_cores; cor1++) {
-            for (cor2 = cor1 + 1; cor2 < numero_cores; cor2++) {
+    for (int vertice = 0; vertice < numero_vertices; vertice++) {//percorre todos os vertices
+        for (cor1 = 0; cor1 < numero_cores; cor1++) {//percorre a primeira cor possivel para esse vertice
+            for (cor2 = cor1 + 1; cor2 < numero_cores; cor2++) { //percorre a segunda cor possivel para esse vertice
+                //cor2 = cor1+1 para que as cores sejam sempre diferentes
                 fprintf(arquivo_saida, "-%d -%d 0\n",
+                //as variáveis são negadas pois um vertice pode não ter nenhuma das duas cores, mas não pode ter as duas ao mesmo tempo
                     nova_variavel(vertice, cor1, numero_cores),
                     nova_variavel(vertice, cor2, numero_cores));
                 total_clausulas++;
@@ -67,17 +77,21 @@ void converter_gcp_para_cnf() {
     }
 
     // Condição 3: Vértices adjacentes não podem ter a mesma cor
-    for (indice_aresta = 0; indice_aresta < numero_arestas; indice_aresta++) {
-        vertice_u = lista_arestas[indice_aresta][0];
+    for (indice_aresta = 0; indice_aresta < numero_arestas; indice_aresta++) {//percorre as arestas
+        //armazena os dois vertices da aresta
+        vertice_u = lista_arestas[indice_aresta][0]; 
         vertice_v = lista_arestas[indice_aresta][1];
-        for (int cor = 0; cor < numero_cores; cor++) {
+        for (int cor = 0; cor < numero_cores; cor++) {//percorre as cores possíveis
             fprintf(arquivo_saida, "-%d -%d 0\n",
                 nova_variavel(vertice_u, cor, numero_cores),
                 nova_variavel(vertice_v, cor, numero_cores));
+            //gera uma clausula com uma variavel correspondente a cada par (vertice,cor)
+            //negadas novamente pois os dois vertices podem não ter aquela cor, mas os dois não podem ter a mesma cor
             total_clausulas++;
         }
     }
 
+    //atualiza o cabeçalho com o numero de clausulas
     rewind(arquivo_saida);
     fprintf(arquivo_saida, "p cnf %d %d\n", total_variaveis, total_clausulas);
 
@@ -87,8 +101,11 @@ void converter_gcp_para_cnf() {
     printf("O arquivo CNF foi gerado com sucesso como 'saida.cnf'.\n");
 }
 
+//traduz o resultado SAT para pares (Vértice, Cor)
+//a tradução é o processo inverso da geração de variáveis unicas
 void traduzir_resultado() {
     FILE *arquivo_resultado;
+    //variaveis necessárias para a tradução
     int numero_vertices, numero_cores, numero_variaveis;
     char nome_arquivo[100];
 
@@ -126,31 +143,44 @@ void traduzir_resultado() {
     fclose(arquivo_resultado);
 }
 
-// =========================
-// Estruturas para SAT solver
-// =========================
+/
+// SAT solver
 
+// --- Definições de estruturas ---
+// NoArvore: representa cada nó de uma árvore binária implícita
 typedef struct NoArvore {
-    int indice_variavel;
-    struct NoArvore *esquerda;
-    struct NoArvore *direita;
+    int indice_variavel; // índice da variável correspondente (0..n-1)
+    struct NoArvore *esquerda; // ponteiro para subárvore com valor 1 nessa variável
+    struct NoArvore *direita; // ponteiro para subárvore com valor 0 nessa variável
+    //cada nó representa uma váriável da fórmula
 } NoArvore;
 
+// FormulaCNF: armazena a lista de cláusulas e parâmetros da fórmula
 typedef struct {
-    int **clausulas;
-    int num_clausulas;
-    int num_variaveis;
+    int **clausulas;// vetor de cláusulas, cada cláusula é vetor de literais terminado em 0
+    //basicamente um vetor de ponteiros, que apontam para outros vetores
+    int num_clausulas; // número de cláusulas lidas
+    int num_variaveis;  // número de variáveis na fórmula (máximo literal absoluto)
 } FormulaCNF;
 
+// Cria árvore binária de profundidade 'num_variaveis'
+// Cada nível corresponde a uma variável, ramificando em verdadeiro (esquerda) e falso (direita)
 NoArvore *criar_arvore(int profundidade, int num_variaveis) {
+    // Se já definimos todas as variáveis, não criamos mais nós
     if (profundidade >= num_variaveis) return NULL;
+    // Aloca um novo nó e define seu índice de variável
     NoArvore *no = malloc(sizeof(*no));
     no->indice_variavel = profundidade;
+    // Cria recursivamente as subárvores:
+    // esquerda = atribuir valor 1 à variável atual
     no->esquerda = criar_arvore(profundidade + 1, num_variaveis);
+    // direita  = atribuir valor 0 à variável atual
     no->direita  = criar_arvore(profundidade + 1, num_variaveis);
     return no;
 }
 
+// Libera memória da árvore 
+// Percorre em pós-ordem para liberar subárvores antes do nó
 void liberar_arvore(NoArvore *no) {
     if (!no) return;
     liberar_arvore(no->esquerda);
@@ -158,42 +188,75 @@ void liberar_arvore(NoArvore *no) {
     free(no);
 }
 
+// Verifica se a fórmula inteira está satisfeita 
+// Para cada cláusula, testa se existe um literal que seja verdadeiro na atribuição atual
 bool formula_satisfeita(const FormulaCNF *formula, int atribuicao[]) {
     for (int i = 0; i < formula->num_clausulas; i++) {
         int *clausula = formula->clausulas[i];
-        bool satisfeita = false;
+        bool clausula_satisfeita = false;
+
+        // Percorre todos os literais até encontrar o marcador de fim (0)
         for (int j = 0; clausula[j] != 0; j++) {
             int literal = clausula[j];
-            int var = abs(literal) - 1;
-            bool verdadeira = atribuicao[var] == 1;
-            if ((literal > 0 && verdadeira) || (literal < 0 && !verdadeira)) {
-                satisfeita = true;
-                break;
+            int indice_variavel = abs(literal) - 1; // Converte literal para índice 0-based
+            
+             //Verifica se a variável correspondente ao literal está atribuída como 1 (verdadeira).
+            bool variavel_verdadeira =  false;
+            if(atribuicao[indice_variavel] == 1)
+            {
+                variavel_verdadeira = true;
+            }
+
+            // Verifica se o literal está satisfeito:
+            // - Literal positivo: variável deve ser 1
+            // - Literal negativo: variável deve ser 0
+            if ((literal > 0 && variavel_verdadeira) || (literal < 0 && !variavel_verdadeira)) {
+                clausula_satisfeita = true;
+                break; // Cláusula satisfeita, passa para a próxima
             }
         }
-        if (!satisfeita) return false;
+        // Se a cláusula atual não foi satisfeita, a fórmula é UNSAT
+        if (!clausula_satisfeita) return false;
     }
-    return true;
+    return true; // Todas as cláusulas foram satisfeitas
 }
 
-bool gerar_com_arvore(NoArvore *no, int atribuicao[], const FormulaCNF *formula, bool *solucao) {
-    if (*solucao) return true;
-    if (!no) {
-        if (formula_satisfeita(formula, atribuicao)) *solucao = true;
-        return *solucao;
+// Gera atribuições usando a árvore para recursão implícita 
+// Caminha a árvore, atribuindo valor 1 (esquerda) antes de 0 (direita) em cada variável
+bool gerar_com_arvore(NoArvore *no_atual, int atribuicao[], const FormulaCNF *formula, bool *solucao_encontrada) {
+    // Interrompe apenas se já encontrou uma solução
+    if (*solucao_encontrada) return true;
+    
+    // Se chegou a um nó nulo, todas as variáveis foram atribuídas
+    if (no_atual == NULL) {
+        // Verifica se a atribuição atual satisfaz a fórmula completa
+        if (formula_satisfeita(formula, atribuicao)) {
+            *solucao_encontrada = true;
+        }
+        return *solucao_encontrada;
     }
-    int i = no->indice_variavel;
-    atribuicao[i] = 1;
-    gerar_com_arvore(no->esquerda, atribuicao, formula, solucao);
-    if (*solucao) return true;
-    atribuicao[i] = 0;
-    gerar_com_arvore(no->direita, atribuicao, formula, solucao);
-    return *solucao;
+    
+    int indice_variavel = no_atual->indice_variavel;
+
+    // Explora subárvore esquerda (atribui valor 1 à variável atual)
+    atribuicao[indice_variavel] = 1;
+    gerar_com_arvore(no_atual->esquerda, atribuicao, formula, solucao_encontrada);
+    if (*solucao_encontrada) return true;
+
+    // Explora subárvore direita (atribui valor 0 à variável atual)
+    atribuicao[indice_variavel] = 0;
+    gerar_com_arvore(no_atual->direita, atribuicao, formula, solucao_encontrada);
+
+
+    return *solucao_encontrada;
 }
 
 FormulaCNF *ler_arquivo_cnf(const char *nome_arquivo) {
     FILE *arquivo = fopen(nome_arquivo, "r");
-    if (!arquivo) { perror("Erro ao abrir arquivo"); return NULL; }
+    if (!arquivo) { 
+        perror("Erro ao abrir arquivo"); 
+        return NULL; 
+    }
 
     FormulaCNF *formula = malloc(sizeof(*formula));
     formula->num_clausulas = 0;
@@ -201,52 +264,85 @@ FormulaCNF *ler_arquivo_cnf(const char *nome_arquivo) {
     formula->clausulas = NULL;
 
     char linha[256];
-    int capacidade = 0, contador = 0;
+    int capacidade_clausulas = 0; // Capacidade inicial do vetor de cláusulas
+    int contador_clausulas = 0; // Número real de cláusulas lidas
 
     while (fgets(linha, sizeof(linha), arquivo)) {
-        if (linha[0] == 'c') continue;
+        if (linha[0] == 'c') continue; // Ignora linhas de comentário
         if (linha[0] == 'p') {
+            // Lê o cabeçalho 'p cnf' com número de variáveis e cláusulas
             sscanf(linha, "p cnf %d %d", &formula->num_variaveis, &formula->num_clausulas);
-            capacidade = formula->num_clausulas;
-            formula->clausulas = malloc(sizeof(int*) * capacidade);
+            capacidade_clausulas = formula->num_clausulas;
+            //aloca espaço para o vetor de clausulas, com capacidade inical  igual ao numero de clausulas
+            formula->clausulas = malloc(sizeof(int*) * capacidade_clausulas);
             continue;
         }
-        if (contador >= capacidade) {
-            capacidade = capacidade == 0 ? 4 : capacidade * 2;
-            formula->clausulas = realloc(formula->clausulas, sizeof(int*) * capacidade);
+        // Realoca o vetor de cláusulas se necessário
+        if (contador_clausulas >= capacidade_clausulas) {
+            capacidade_clausulas *= 2;
+            formula->clausulas = realloc(formula->clausulas, sizeof(int*) * capacidade_clausulas);
         }
-        int *clausula = NULL, tam = 0, cap = 0, literal;
+        
+       // Buffer para armazenar os literais da cláusula atual
+        int *literais_clausula = NULL;
+        int tamanho_literais = 0;    // Número de literais lidos
+        int capacidade_literais = 0; // Capacidade atual do buffer
+
+        // Divide a linha em tokens (literais)
         char *token = strtok(linha, " \n");
         while (token != NULL) {
-            literal = atoi(token);
-            if (literal == 0) break;
+            //converte o token de string para inteiro
+            int literal = atoi(token);
+            if (literal == 0) break; // Fim da cláusula
+
+            // Validação do literal
+            //se o literal for um numero maior que o numero de variaveis, retorna erro
             if (abs(literal) > formula->num_variaveis) {
-                fprintf(stderr, "Literal %d fora do intervalo\n", literal);
+                fprintf(stderr, "Erro: Literal %d fora do intervalo\n", literal);
                 fclose(arquivo);
-                free(clausula);
+                free(literais_clausula); // Libera o buffer antes de retornar
                 free(formula->clausulas);
                 free(formula);
                 return NULL;
             }
-            if (tam >= cap) {
-                cap = cap == 0 ? 4 : cap * 2;
-                clausula = realloc(clausula, sizeof(int) * cap);
+
+            // Expande o buffer de literais se necessário
+            if (tamanho_literais >= capacidade_literais) {
+                //Se a capacidade ainda não foi definida (ou seja, 0), ela é inicializada com 4. Caso contrário, ela dobra de tamanho
+                capacidade_literais = (capacidade_literais == 0) ? 4 : capacidade_literais * 2;
+                //realoca memoria para armazenar mais literais, sem perder os já lidos
+                literais_clausula = realloc(literais_clausula, sizeof(int) * capacidade_literais);
             }
-            clausula[tam++] = literal;
+            //armazena o valor de litera, no vetor, literais_clausula
+            //usa o indice atual de tamanho_literais, delposi incrementa ele
+            literais_clausula[tamanho_literais++] = literal;
+            //chama o proximo token da string que está sendo lida
             token = strtok(NULL, " \n");
         }
-        clausula = realloc(clausula, sizeof(int) * (tam + 1));
-        clausula[tam] = 0;
-        formula->clausulas[contador++] = clausula;
+
+        // Verifica se a clausula não está vazia, para adicioná-la a formula
+        if (tamanho_literais > 0) {
+            // Redimensiona o vetor literais_clausula para comportar um elemento extra, que será usado como marcador de fim (o 0 no formato CNF)
+            literais_clausula = realloc(literais_clausula, sizeof(int) * (tamanho_literais + 1));
+            //adiciona o terminador 0 na ultima posição do vetor
+            literais_clausula[tamanho_literais] = 0; // Terminador
+            //Adiciona o ponteiro para o vetor de literais da cláusula no vetor clausulas da fórmula
+            //Atualiza o contador de cláusulas
+            formula->clausulas[contador_clausulas++] = literais_clausula;
+        }
     }
 
     fclose(arquivo);
-    formula->num_clausulas = contador;
+    formula->num_clausulas = contador_clausulas; // Atualiza com o número real
     return formula;
 }
 
+// Libera memória da fórmula 
+// Libera cada cláusula e o vetor de ponteiros, depois a própria estrutura
 void liberar_formula(FormulaCNF *formula) {
-    for (int i = 0; i < formula->num_clausulas; i++) free(formula->clausulas[i]);
+    for (int i = 0; i < formula->num_clausulas; i++){
+        free(formula->clausulas[i]);
+    }
     free(formula->clausulas);
     free(formula);
 }
@@ -256,23 +352,29 @@ void resolver_sat() {
     FormulaCNF *formula = ler_arquivo_cnf(nome_arquivo);
     if (!formula) return;
 
+    // Caso SAT trivial: fórmula sem cláusulas é sempre satisfatível
     if (formula->num_clausulas == 0) {
         printf("SAT\n");
         liberar_formula(formula);
         return;
     }
 
+    // Cria um vetor para armazenar a atribuição booleana de cada variável.
+    //Valor -1 indica que a variável ainda não foi atribuída.
     int *atribuicoes = malloc(sizeof(int) * formula->num_variaveis);
     for (int i = 0; i < formula->num_variaveis; i++) atribuicoes[i] = -1;
 
+    // Cria árvore de decisão para explorar todas as combinações possíveis
     NoArvore *arvore = criar_arvore(0, formula->num_variaveis);
-    bool solucao = false;
+    bool solucao_encontrada = false;
 
-    gerar_com_arvore(arvore, atribuicoes, formula, &solucao);
+    // Realiza busca exaustiva usando a árvore
+    gerar_com_arvore(arvore, atribuicoes, formula, &solucao_encontrada);
     liberar_arvore(arvore);
 
+   //Escreve resultados no arquivo de saída
     FILE *saida = fopen("resultado_sat.txt", "w");
-    if (solucao) {
+    if (solucao_encontrada) {
         for (int i = 0; i < formula->num_variaveis; i++) {
             fprintf(saida, "x%d = %d\n", i + 1, atribuicoes[i] == -1 ? 0 : atribuicoes[i]);
         }
