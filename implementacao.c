@@ -49,7 +49,7 @@ void converter_gcp_para_cnf() {
     int total_clausulas = 0;
 
     //escreve o cabeçalho do arquivo CNF, mas sem o numero de clausulas pois ainda nao foram escritas
-    fprintf(arquivo_saida, "p cnf %d 0\n", total_variaveis);
+    fprintf(arquivo_saida, "p cnf %d 0\n ", total_variaveis);
 
     // Condição 1: Cada vértice deve ter pelo menos uma cor 
     for (int vertice = 0; vertice < numero_vertices; vertice++) {//percorre todos os vertices
