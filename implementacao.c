@@ -7,7 +7,7 @@
 #define MAX_ARESTAS 1000
 #define MAX_CORES 10
 
-// Tradutor GCP -> CNF
+//Tradutor GCP -> CNF
 
 //gerador de variaveis com base no par (vertice x, cor y)
 int nova_variavel(int vertice, int cor, int total_cores) {
