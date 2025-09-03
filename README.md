@@ -2,8 +2,8 @@
 Implementação do problema de coloração de vértices, com SAT Solver em C.
 
 ## Como usar? 
-1 - O arquivo a ser executado é o "implementacao.c" (os arquivos "gcp_ok.c" e "sat_solver.c" são este mesmo arquivo separado em duas partes);  
-2 - No arquivo entrada.txt, digite o Graph Coloring Problem seguindo a estrutura abaixo;  
+1 - O arquivo a ser executado é o `implementacao.c`;  
+2 - No arquivo `entrada.txt`, digite o Graph Coloring Problem seguindo a estrutura abaixo;  
   
     GCP <numero_de_vertices> <numero_de_cores> <numero_de _arestas> (na linha seguinte vamos inserir as arestas);    
     a <vertice_x1> <vertice_y1>  
