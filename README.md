@@ -1,5 +1,5 @@
 # GCP_with_SATSolver
-Implementação do problema de coloração de vértices, com SAT Solver em C.
+Implementação de solução para o problema de coloração de vértices, com SAT Solver em C.
 
 ## Como usar? 
 1 - O arquivo a ser executado é o `implementacao.c`;  
